@@ -895,6 +895,7 @@ class Component extends DCLogic {
         cuotaNum: Number(r['Cuota número']) || 0,
         cuotaMensual: Number(r['Cuota mensual']) || 0,
         estado: String(r['Estado'] || '').trim(),
+        cuotasRestantesSheet: r['Cuotas restantes'] !== '' && r['Cuotas restantes'] !== undefined ? Number(r['Cuotas restantes']) : null,
         tna: r['TNA'],
       };
     }).filter(r => r.nombre);
@@ -902,6 +903,10 @@ class Component extends DCLogic {
     const deudaGroups = nombresDeuda.map(nombre => {
       const rows = deudaRowsRaw.filter(r => r.nombre === nombre).sort((a, b) => a.cuotaNum - b.cuotaNum || a.fecha - b.fecha);
       const pendientes = rows.filter(r => !pagadaRe.test(r.estado));
+      // La columna "Cuotas restantes" de la hoja es la fuente de verdad (la carga/edita el usuario directamente);
+      // si está presente en la próxima cuota pendiente, se usa esa en vez de contar filas "Pendiente" a mano
+      // (evita descuadres si alguna fila quedó mal marcada).
+      const cuotasRestantesReal = pendientes.length && pendientes[0].cuotasRestantesSheet !== null ? pendientes[0].cuotasRestantesSheet : pendientes.length;
       const restanteTotal = pendientes.reduce((a, r) => a + r.cuotaMensual, 0);
       const rowEsteMes = rows.find(r => this.monthKey(r.fecha) === nowMonthKey);
       const estadoMes = rowEsteMes ? (pagadaRe.test(rowEsteMes.estado) ? 'Pagado' : 'Pendiente') : (pendientes.length === 0 ? 'Pagado' : 'Sin cuota');
@@ -912,7 +917,7 @@ class Component extends DCLogic {
       const cuotaProxima = pendientes.length ? pendientes[0].cuotaMensual : (rows.length ? rows[rows.length - 1].cuotaMensual : 0);
       // Fecha estimada en que arrancó el plan, inferida de la primera cuota conocida (cuota N → hoy - (N-1) meses).
       const startDate = rows.length ? this.addMonths(rows[0].fecha, -(rows[0].cuotaNum - 1)) : null;
-      return { nombre, restanteTotal, cuotaProxima, cuotasPendientes: pendientes.length, cuotasTotales: rows.length, estadoMes, badgeClass, tnaTxt, payoffDate, startDate };
+      return { nombre, restanteTotal, cuotaProxima, cuotasPendientes: cuotasRestantesReal, cuotasTotales: rows.length, estadoMes, badgeClass, tnaTxt, payoffDate, startDate };
     }).filter(d => d.cuotasTotales > 0);
 
     const totalRestante = deudaGroups.reduce((a, d) => a + d.restanteTotal, 0);
