@@ -408,7 +408,7 @@ a{color:var(--accent)}a:hover{color:#E48B6E}
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
-  API_URL = 'https://script.google.com/macros/s/AKfycbyxoGGvn0KRoIbelHmQVnKZTSVi-QTYRpPQX_4XQkrapz0G-zkpo6KYMQ8JzfNJeqwxPA/exec';
+  API_URL = 'https://script.google.com/macros/s/AKfycbyY9lcFL3L1PAn_hDGDz2n_ot3G76RQE-DoGIEU4bhTKeegIlv-7jCCuCiKkpWPJHFM5Q/exec';
   MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   MESES_IDX = { enero:0, febrero:1, marzo:2, abril:3, mayo:4, junio:5, julio:6, agosto:7, septiembre:8, setiembre:8, octubre:9, noviembre:10, diciembre:11 };
   MESES_FULL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -691,8 +691,6 @@ class Component extends DCLogic {
     this.saveDeudaConfig('Tarjeta Galicia', 'Extra Schedule JSON', JSON.stringify(sched));
   }
   setDeudasSubTab(tab) { this.setState({ deudasSubTab: tab }); }
-  // Cuando marcás la cuota del mes como pagada, descuenta el capital amortizado de esa cuota
-  // (amortización francesa) en vez de tener que actualizar "Capital adeudado" a mano.
   markCuotaPagadaGalicia() {
     const key = this.monthKey(new Date());
     if (this.state.galiciaCapitalUpdatedMonth === key) return;
@@ -730,7 +728,6 @@ class Component extends DCLogic {
   onNaranjaCapitalInput(v) { const n = Number(v) || 0; localStorage.setItem('finanzas_naranja_capital', String(n)); this.setState({ naranjaCapital: n, editingField: null }); this.saveDeudaConfig('Tarjeta Naranja', 'Capital adeudado', n); }
   onNaranjaCuotaSimInput(v) { const n = Number(v) || 0; localStorage.setItem('finanzas_naranja_cuota_sim', String(n)); this.setState({ naranjaCuotaSim: n, editingField: null }); }
 
-  // Amortización francesa: cuota fija mensual, recalcula capital mes a mes hasta llegar a 0.
   projectDebt(capitalInicial, tnaAnual, cuotaFija) {
     const rate = tnaAnual / 12;
     const now = new Date();
@@ -752,10 +749,8 @@ class Component extends DCLogic {
     return { rows, months, payoffDate: rows.length ? rows[rows.length - 1].date : null, totalInterest };
   }
 
-  // Si pagás más o menos de $350.000 de extra, el plazo se reproyecta solo.
   projectGalicia(capitalInicial, extra) { return this.projectDebt(capitalInicial, this.GALICIA_TNA, this.GALICIA_CUOTA_BASE + extra); }
 
-  // Igual que projectDebt, pero el extra puede variar mes a mes (extraFn recibe la fecha de cada cuota).
   projectDebtSchedule(capitalInicial, tnaAnual, cuotaBase, extraFn) {
     const rate = tnaAnual / 12;
     const now = new Date();
@@ -882,7 +877,6 @@ class Component extends DCLogic {
     const budgetRows = catRows;
     const categoriasExcedidas = catRows.filter(b => presupuestoMap[b.categoria] > 0 && b._sort >= 100).length;
 
-    // La hoja "Deudas tarjeta" es un cronograma: una fila por cuota (pasada y futura) de cada deuda.
     const now = new Date();
     const nowMonthKey = this.monthKey(now);
     const pagadaRe = /pagad/i;
@@ -903,9 +897,6 @@ class Component extends DCLogic {
     const deudaGroups = nombresDeuda.map(nombre => {
       const rows = deudaRowsRaw.filter(r => r.nombre === nombre).sort((a, b) => a.cuotaNum - b.cuotaNum || a.fecha - b.fecha);
       const pendientes = rows.filter(r => !pagadaRe.test(r.estado));
-      // La columna "Cuotas restantes" de la hoja es la fuente de verdad (la carga/edita el usuario directamente);
-      // si está presente en la próxima cuota pendiente, se usa esa en vez de contar filas "Pendiente" a mano
-      // (evita descuadres si alguna fila quedó mal marcada).
       const cuotasRestantesReal = pendientes.length && pendientes[0].cuotasRestantesSheet !== null ? pendientes[0].cuotasRestantesSheet : pendientes.length;
       const restanteTotal = pendientes.reduce((a, r) => a + r.cuotaMensual, 0);
       const rowEsteMes = rows.find(r => this.monthKey(r.fecha) === nowMonthKey);
@@ -915,7 +906,6 @@ class Component extends DCLogic {
       const tnaTxt = tnaRow ? (Math.round(Number(tnaRow.tna) * 100) + '%') : 'sin datos';
       const payoffDate = pendientes.length ? pendientes.reduce((a, r) => (r.fecha > a ? r.fecha : a), pendientes[0].fecha) : null;
       const cuotaProxima = pendientes.length ? pendientes[0].cuotaMensual : (rows.length ? rows[rows.length - 1].cuotaMensual : 0);
-      // Fecha estimada en que arrancó el plan, inferida de la primera cuota conocida (cuota N → hoy - (N-1) meses).
       const startDate = rows.length ? this.addMonths(rows[0].fecha, -(rows[0].cuotaNum - 1)) : null;
       return { nombre, restanteTotal, cuotaProxima, cuotasPendientes: cuotasRestantesReal, cuotasTotales: rows.length, estadoMes, badgeClass, tnaTxt, payoffDate, startDate };
     }).filter(d => d.cuotasTotales > 0);
@@ -929,7 +919,6 @@ class Component extends DCLogic {
     const payoffOverallDate = payoffDates.length ? payoffDates.reduce((a, d) => (d > a ? d : a)) : null;
     const payoffLabel = payoffOverallDate ? this.monthLabel(this.monthKey(payoffOverallDate)) : '—';
     const monthsBetween = (a, b) => (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-    // "Hoy" se ubica según cuotas realmente pagadas/totales (mismo dato que el header), no una fecha de inicio estimada.
     const hoyPosNum = pctPagadoOverallNum;
     const remainingMonths = deudaGroups.filter(d => d.payoffDate).map(d => Math.max(0, monthsBetween(now, d.payoffDate)));
     const maxRemaining = remainingMonths.length ? Math.max(1, ...remainingMonths) : 1;
@@ -986,8 +975,6 @@ class Component extends DCLogic {
     const reactivacionAccel = this.addMonths(nowDate, 2);
     const reactivacionNo = this.addMonths(nowDate, 4);
 
-    // Reactivación Naranja: requiere 12 cuotas pagadas en término desde el inicio del plan de refinanciación (marzo 2026).
-    // Sin adelantos (avalancha va toda a Galicia) → ritmo de 1 cuota/mes.
     const NARANJA_REACTIVACION_REQ = 12;
     const naranjaGroup = deudaGroups.find(d => /naranja/i.test(d.nombre));
     const naranjaCuotasPagadas = naranjaGroup ? Math.max(0, naranjaGroup.cuotasTotales - naranjaGroup.cuotasPendientes) : 3;
@@ -996,7 +983,6 @@ class Component extends DCLogic {
     const naranjaPct = Math.min(100, (naranjaCuotasPagadas / NARANJA_REACTIVACION_REQ) * 100);
     const naranjaCuotaFmt = naranjaGroup ? this.fmtMoney(naranjaGroup.cuotaProxima) : this.fmtMoney(279307);
 
-    // Simuladores de ahorro por cuota: comparan pagar una cuota mensual elegida vs. pagar solo la cuota mínima.
     const galSim = this.projectDebt(s.galiciaCapital, this.GALICIA_TNA, s.galiciaCuotaSim);
     const galSimAhorro = Math.max(0, galNo.totalInterest - galSim.totalInterest);
     const naranjaSim = this.projectDebt(s.naranjaCapital, this.NARANJA_TNA, s.naranjaCuotaSim);
@@ -1029,8 +1015,6 @@ class Component extends DCLogic {
       return { key, cumplido, label: this.monthLabel(key), ahorroFmt: this.fmtMoney(ahorroM), estado: goal > 0 ? (cumplido ? 'Cumplida' : 'No cumplida') : '—', color: goal > 0 ? (cumplido ? 'var(--good)' : 'var(--bad)') : 'var(--ink-soft)' };
     });
     const savingsHistory = savingsHistoryRaw;
-    // Racha: meses consecutivos cumpliendo la meta, contando desde el mes anterior al actual hacia atrás
-    // (el mes en curso todavía puede cambiar, así que no cuenta para la racha).
     let streak = 0;
     for (let i = 1; i < savingsHistoryRaw.length; i++) { if (savingsHistoryRaw[i].cumplido) streak++; else break; }
     const hasStreak = goal > 0 && streak > 0;
