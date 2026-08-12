@@ -387,7 +387,7 @@ a{color:var(--accent)}a:hover{color:#E48B6E}
 <div class="modalhead"><h2 class="serif" style="font-size:18px;margin:0">Nuevo movimiento</h2><button class="closebtn" onClick="{{ closeModal }}">✕</button></div>
 <div class="field"><label>Concepto</label><input value="{{ form.concepto }}" onInput="{{ onConceptoInput }}" placeholder="Ej: Supermercado"></div>
 <div class="row2">
-<div class="field"><label>Categoría</label><input value="{{ form.categoria }}" onInput="{{ onCategoriaInput }}" list="catlist" placeholder="Elegí o escribí"><datalist id="catlist"><sc-for list="{{ categoriesList }}" as="cat" hint-placeholder-count="4"><option value="{{ cat }}"></option></sc-for></datalist></div>
+<div class="field"><label>Categoría</label><select value="{{ form.categoriaSel }}" onChange="{{ onCategoriaSelChange }}"><option value="">Elegí una categoría</option><sc-for list="{{ categoriesList }}" as="cat" hint-placeholder-count="4"><option value="{{ cat }}">{{ cat }}</option></sc-for><option value="__new__">+ Nueva categoría…</option></select><sc-if value="{{ isCategoriaNueva }}" hint-placeholder-val="{{ false }}"><input value="{{ form.categoriaNueva }}" onInput="{{ onCategoriaNuevaInput }}" placeholder="Ej: Mascotas" aria-label="Nombre de la nueva categoría" style="margin-top:6px"></sc-if></div>
 <div class="field"><label>Monto</label><input class="mono" type="number" value="{{ form.monto }}" onInput="{{ onMontoInput }}" placeholder="0"></div>
 </div>
 <div class="row2">
@@ -432,7 +432,7 @@ class Component extends DCLogic {
     deudasSubTab: 'resumen',
     galiciaCapitalUpdatedMonth: localStorage.getItem('finanzas_galicia_capital_month') || null,
     naranjaCapitalUpdatedMonth: localStorage.getItem('finanzas_naranja_capital_month') || null,
-    form: { concepto: '', categoria: '', monto: '', tipo: 'Gasto', metodoPago: 'Efectivo', estado: 'Pagado', recurrente: false, deuda: '' },
+    form: { concepto: '', categoria: '', categoriaSel: '', categoriaNueva: '', monto: '', tipo: 'Gasto', metodoPago: 'Efectivo', estado: 'Pagado', recurrente: false, deuda: '' },
   };
 
   componentDidMount() {
@@ -537,7 +537,7 @@ class Component extends DCLogic {
   setTab(tab) { this.setState({ activeTab: tab }); }
   setMonth(key) { this.setState({ selectedMonth: key }); }
 
-  openModal() { this.setState({ modalOpen: true, form: { concepto: '', categoria: '', monto: '', tipo: 'Gasto', metodoPago: 'Efectivo', estado: 'Pagado', recurrente: false, deuda: '' } }); }
+  openModal() { this.setState({ modalOpen: true, form: { concepto: '', categoria: '', categoriaSel: '', categoriaNueva: '', monto: '', tipo: 'Gasto', metodoPago: 'Efectivo', estado: 'Pagado', recurrente: false, deuda: '' } }); }
   closeModal() { this.setState({ modalOpen: false }); }
 
   updateForm(key, val) { this.setState(s => ({ form: { ...s.form, [key]: val } })); }
@@ -1023,7 +1023,7 @@ class Component extends DCLogic {
     const tabsDef = [['resumen', 'Resumen'], ['presupuestos', 'Presupuestos'], ['meta', 'Meta de ahorro'], ['deudas', 'Deudas']];
     const tabs = tabsDef.map(([key, label]) => ({ label, activeClass: s.activeTab === key ? 'active' : '', onClick: () => this.setTab(key) }));
 
-    const categoriesList = Array.from(new Set(gastosNorm.map(g => g.categoria))).filter(Boolean).sort();
+    const categoriesList = Array.from(new Set([...gastosNorm.map(g => g.categoria), ...s.presupuestos.map(p => String(p['Categoría'] || '').trim())])).filter(c => c && c !== 'Sin categoría').sort((a, b) => a.localeCompare(b, 'es'));
     const deudaOptions = nombresDeuda;
 
     return {
@@ -1082,11 +1082,11 @@ class Component extends DCLogic {
       naranjaSimInteresFmt: this.fmtMoney(naranjaSim.totalInterest), naranjaSimAhorroFmt: this.fmtMoney(naranjaSimAhorro),
       modalOpen: s.modalOpen, openModal: () => this.openModal(), closeModal: () => this.closeModal(), onBackdropClick: (e) => { if (e.target === e.currentTarget) this.closeModal(); },
       form: s.form,
-      onConceptoInput: (e) => this.updateForm('concepto', e.target.value), onCategoriaInput: (e) => this.updateForm('categoria', e.target.value), onMontoInput: (e) => this.updateForm('monto', e.target.value),
+      onConceptoInput: (e) => this.updateForm('concepto', e.target.value), onCategoriaSelChange: (e) => { const val = e.target.value; if (val === '__new__') { this.setState(s => ({ form: { ...s.form, categoriaSel: val, categoriaNueva: '', categoria: '' } })); } else { this.setState(s => ({ form: { ...s.form, categoriaSel: val, categoria: val } })); } }, onCategoriaNuevaInput: (e) => { const val = e.target.value; this.setState(s => ({ form: { ...s.form, categoriaNueva: val, categoria: val } })); }, onMontoInput: (e) => this.updateForm('monto', e.target.value),
       onTipoChange: (e) => this.updateForm('tipo', e.target.value), onMedioChange: (e) => this.updateForm('metodoPago', e.target.value), onEstadoChange: (e) => this.updateForm('estado', e.target.value),
       onRecurrenteChange: (e) => this.updateForm('recurrente', e.target.checked),
       onDeudaChange: (e) => this.updateForm('deuda', e.target.value), deudaOptions,
-      categoriesList, tiposList: this.TIPOS, mediosList: this.MEDIOS, estadosList: this.ESTADOS,
+      categoriesList, isCategoriaNueva: s.form.categoriaSel === '__new__', tiposList: this.TIPOS, mediosList: this.MEDIOS, estadosList: this.ESTADOS,
       submitting: s.submitting, submitGasto: () => this.submitGasto(), submitLabel: s.submitting ? 'Guardando…' : 'Guardar movimiento',
       hasToast: !!s.toast, toastMsg: s.toast ? s.toast.msg : '', toastClass: s.toast && s.toast.bad ? 'bad' : '',
       monthsBlockPlaceholder: '',
