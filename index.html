@@ -547,8 +547,9 @@ class Component extends DCLogic {
     if (!f.concepto.trim() || !f.categoria.trim() || !Number(f.monto)) { this.showToast('Completá concepto, categoría y monto', true); return; }
     this.setState({ submitting: true });
     const datos = { concepto: f.concepto.trim(), categoria: f.categoria.trim(), monto: Number(f.monto), tipo: f.tipo, metodoPago: f.metodoPago, recurrente: f.recurrente, estado: f.estado, deuda: f.deuda || '' };
-    const mesActual = this.MESES_IDX && Object.keys(this.MESES_IDX).find(k => this.MESES_IDX[k] === new Date().getMonth());
-    const nuevo = { rowIndex: -1, 'Marca temporal': mesActual, Concepto: datos.concepto, Categoría: datos.categoria, Monto: datos.monto, Tipo: datos.tipo, 'Método de pago': datos.metodoPago, Recurrente: datos.recurrente ? 'Si' : 'No', Estado: datos.estado, Deuda: datos.deuda };
+    const hoy = new Date();
+    const marcaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+    const nuevo = { rowIndex: -1, 'Marca temporal': marcaHoy, Concepto: datos.concepto, Categoría: datos.categoria, Monto: datos.monto, Tipo: datos.tipo, 'Método de pago': datos.metodoPago, Recurrente: datos.recurrente ? 'Si' : 'No', Estado: datos.estado, Deuda: datos.deuda };
     try {
       if (this.state.connected) {
         const res = await fetch(this.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'agregarGasto', datos }) });
